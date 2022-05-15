@@ -85,6 +85,7 @@ FEATURES_NAMESPACE_BEGIN
             std::cout << "SIFT: Localizing and filtering keypoints..." << std::endl;
         }
         timer.reset();
+        // 依据 泰勒拟合算法， 对选择的 特征点 进行精确定位
         this->keypoint_localization();
         if (this->options.debug_output) {
             std::cout << "SIFT: Retained " << this->keypoints.size() << " stable "
@@ -367,7 +368,8 @@ FEATURES_NAMESPACE_BEGIN
              * The procedure might get iterated around a neighboring pixel if
              * the accurate keypoint is off by >0.6 from the center pixel.
              */
-#       define AT(S, OFF) (dogs[S]->at(px + OFF))
+#       define AT(S, OFF) (dogs[S]->at(px + (OFF)))
+            // 单次点 只 迭代 5 次
             for (int j = 0; j < 5; ++j) {
                 std::size_t px = iy * w + ix;
 
@@ -438,7 +440,7 @@ FEATURES_NAMESPACE_BEGIN
 
 
                 /* Check if accurate location is far away from pixel center. */
-                // dx =0 表示|dx|>0.6f
+                // dx =0 表示|dx| > 0.6f 大于 该值 表示 插值的 中心已经到了相邻点，则必须重新插值
                 int dx = (delta_x > 0.6f && ix < w - 2) * 1 + (delta_x < -0.6f && ix > 1) * -1;
                 int dy = (delta_y > 0.6f && iy < h - 2) * 1 + (delta_y < -0.6f && iy > 1) * -1;
 
@@ -462,20 +464,17 @@ FEATURES_NAMESPACE_BEGIN
              * f(x0)--表示插值点(ix, iy, is) 处的DoG值，可通过dogs[1]->at(ix, iy, 0)获取
              * delta--为上述求得的delta=[delta_x, delta_y, delta_s]
              * D--为一阶导数，表示为(Dx, Dy, Ds)
-             * 请给出求解val的代码
              */
-            //float val = 0.0;
-            /*                  */
-            /*    此处添加代码    */
-            /*                  */
-            /************************************************************************************/
             float val = dogs[1]->at(ix, iy, 0) + 0.5f * (Dx * delta_x + Dy * delta_y + Ds * delta_s);
-            /* Calcualte edge response score Tr(H)^2 / Det(H), see Section 4.1. */
 
-            /**************************去除边缘点，参考第33页slide 仔细阅读代码 ****************************/
+            /* Calcualte edge response score Tr(H)^2 / Det(H), see Section 4.1.
+             * hessian_score 越大 则 特征点极可能是边缘
+             * */
             float hessian_trace = Dxx + Dyy;
             float hessian_det = Dxx * Dyy - MATH_POW2(Dxy);
             float hessian_score = MATH_POW2(hessian_trace) / hessian_det;
+
+            /* 这里给出了 人为设定的阈值 */
             float score_thres = MATH_POW2(this->options.edge_ratio_threshold + 1.0f)
                                 / this->options.edge_ratio_threshold;
             /********************************************************************************/
